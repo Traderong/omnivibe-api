@@ -38,5 +38,18 @@ func RegisterUser(ctx context.Context, req RegisterRequest) (*User, error) {
 		return nil, err
 	}
 
+	verificationToken, err := GenerateVerificationToken()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := SaveVerificationToken(
+		ctx,
+		user.ID.String(),
+		verificationToken,
+	); err != nil {
+		return nil, err
+	}
+
 	return user, nil
 }

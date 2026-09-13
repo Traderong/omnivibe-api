@@ -24,6 +24,7 @@ func main() {
 
 	http.HandleFunc("/api/auth/register", handlers.Register)
         http.HandleFunc("/api/auth/login", handlers.Login)
+        http.HandleFunc("/api/auth/verify-email", handlers.VerifyEmail)
         meHandler := http.HandlerFunc(handlers.Me)
         http.Handle("/api/me", auth.AuthMiddleware(meHandler))
         updateProfileHandler := http.HandlerFunc(handlers.UpdateProfile)
