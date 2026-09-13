@@ -26,6 +26,8 @@ func main() {
         http.HandleFunc("/api/auth/login", handlers.Login)
         meHandler := http.HandlerFunc(handlers.Me)
         http.Handle("/api/me", auth.AuthMiddleware(meHandler))
+        updateProfileHandler := http.HandlerFunc(handlers.UpdateProfile)
+        http.Handle("/api/me/profile", auth.AuthMiddleware(updateProfileHandler))
 	log.Println("OmniVibe backend started on http://localhost:8080")
 	log.Println("PostgreSQL connected successfully")
 
