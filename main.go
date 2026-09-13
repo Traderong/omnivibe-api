@@ -3,10 +3,12 @@ package main
 import (
 	"log"
 	"net/http"
-
+        "github.com/Traderong/omnivibe-api/auth"
 	"github.com/Traderong/omnivibe-api/database"
 	"github.com/Traderong/omnivibe-api/handlers"
 	"github.com/joho/godotenv"
+        
+
 )
 
 func main() {
@@ -21,7 +23,9 @@ func main() {
 	defer db.Close()
 
 	http.HandleFunc("/api/auth/register", handlers.Register)
-
+        http.HandleFunc("/api/auth/login", handlers.Login)
+        meHandler := http.HandlerFunc(handlers.Me)
+        http.Handle("/api/me", auth.AuthMiddleware(meHandler))
 	log.Println("OmniVibe backend started on http://localhost:8080")
 	log.Println("PostgreSQL connected successfully")
 
