@@ -2,8 +2,10 @@ package main
 
 import (
 	"log"
+	"net/http"
 
 	"github.com/Traderong/omnivibe-api/database"
+	"github.com/Traderong/omnivibe-api/handlers"
 	"github.com/joho/godotenv"
 )
 
@@ -18,6 +20,12 @@ func main() {
 	}
 	defer db.Close()
 
-	log.Println("OmniVibe backend started successfully")
+	http.HandleFunc("/api/auth/register", handlers.Register)
+
+	log.Println("OmniVibe backend started on http://localhost:8080")
 	log.Println("PostgreSQL connected successfully")
+
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatal("HTTP server failed:", err)
+	}
 }
