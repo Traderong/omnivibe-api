@@ -8,6 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+var DB *pgxpool.Pool
+
 func Connect() (*pgxpool.Pool, error) {
 	config, err := pgxpool.ParseConfig("postgres://localhost:5432/omnivibe")
 	if err != nil {
@@ -41,6 +43,8 @@ func Connect() (*pgxpool.Pool, error) {
 		pool.Close()
 		return nil, err
 	}
+
+	DB = pool
 
 	return pool, nil
 }
