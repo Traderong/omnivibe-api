@@ -8,42 +8,94 @@ import (
 )
 
 func ValidateRegisterRequest(req RegisterRequest) error {
-	req.Username = strings.TrimSpace(req.Username)
-	req.Email = strings.TrimSpace(req.Email)
-	req.DisplayName = strings.TrimSpace(req.DisplayName)
+	username := strings.TrimSpace(req.Username)
+	email := strings.TrimSpace(req.Email)
+	displayName := strings.TrimSpace(req.DisplayName)
+	password := req.Password
 
-	if req.Username == "" {
+	if username == "" {
 		return fmt.Errorf("username is required")
 	}
 
-	if len(req.Username) < 3 || len(req.Username) > 30 {
+	if len(username) < 3 || len(username) > 30 {
 		return fmt.Errorf("username must be between 3 and 30 characters")
 	}
 
-	for _, r := range req.Username {
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
-			return fmt.Errorf("username can only contain letters, numbers, and underscores")
+	for _, r := range username {
+		if !unicode.IsLetter(r) &&
+			!unicode.IsDigit(r) &&
+			r != '_' {
+			return fmt.Errorf(
+				"username can only contain letters, numbers, and underscores",
+			)
 		}
 	}
 
-	if req.Email == "" {
+	if email == "" {
 		return fmt.Errorf("email is required")
 	}
 
-	if _, err := mail.ParseAddress(req.Email); err != nil {
+	if len(email) > 255 {
+		return fmt.Errorf("email must not exceed 255 characters")
+	}
+
+	parsedEmail, err := mail.ParseAddress(email)
+	if err != nil || parsedEmail.Address != email {
 		return fmt.Errorf("invalid email address")
 	}
 
-	if req.DisplayName == "" {
+	if displayName == "" {
 		return fmt.Errorf("display name is required")
 	}
 
-	if len(req.DisplayName) < 2 || len(req.DisplayName) > 100 {
+	if len(displayName) < 2 || len(displayName) > 100 {
 		return fmt.Errorf("display name must be between 2 and 100 characters")
 	}
 
-	if len(req.Password) < 8 {
+	if password == "" {
+		return fmt.Errorf("password is required")
+	}
+
+	if len(password) < 8 {
 		return fmt.Errorf("password must be at least 8 characters")
+	}
+
+	if len(password) > 72 {
+		return fmt.Errorf("password must not exceed 72 characters")
+	}
+
+	var hasUpper bool
+	var hasLower bool
+	var hasNumber bool
+	var hasSpecial bool
+
+	for _, r := range password {
+		switch {
+		case unicode.IsUpper(r):
+			hasUpper = true
+		case unicode.IsLower(r):
+			hasLower = true
+		case unicode.IsDigit(r):
+			hasNumber = true
+		case unicode.IsPunct(r) || unicode.IsSymbol(r):
+			hasSpecial = true
+		}
+	}
+
+	if !hasUpper {
+		return fmt.Errorf("password must contain at least one uppercase letter")
+	}
+
+	if !hasLower {
+		return fmt.Errorf("password must contain at least one lowercase letter")
+	}
+
+	if !hasNumber {
+		return fmt.Errorf("password must contain at least one number")
+	}
+
+	if !hasSpecial {
+		return fmt.Errorf("password must contain at least one special character")
 	}
 
 	return nil
