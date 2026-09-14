@@ -87,12 +87,18 @@ func RotateRefreshToken(
 
 	tokenHash := hashRefreshToken(token)
 
+	tx, err := database.DB.Begin(ctx)
+	if err != nil {
+		return nil, "", fmt.Errorf("begin refresh token rotation: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	var (
 		user       User
 		oldTokenID string
 	)
 
-	err := database.DB.QueryRow(
+	err = tx.QueryRow(
 		ctx,
 		`SELECT
 			rt.id::text,
@@ -112,6 +118,7 @@ func RotateRefreshToken(
 		 WHERE rt.token_hash = $1
 		   AND rt.revoked_at IS NULL
 		   AND rt.expires_at > NOW()
+		 FOR UPDATE OF rt
 		 LIMIT 1`,
 		tokenHash,
 	).Scan(
@@ -137,21 +144,20 @@ func RotateRefreshToken(
 		return nil, "", errors.New("account is inactive")
 	}
 
-	tx, err := database.DB.Begin(ctx)
-	if err != nil {
-		return nil, "", fmt.Errorf("begin refresh token rotation: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	if _, err := tx.Exec(
+	result, err := tx.Exec(
 		ctx,
 		`UPDATE refresh_tokens
 		 SET revoked_at = NOW()
 		 WHERE id = $1
 		   AND revoked_at IS NULL`,
 		oldTokenID,
-	); err != nil {
+	)
+	if err != nil {
 		return nil, "", fmt.Errorf("revoke refresh token: %w", err)
+	}
+
+	if result.RowsAffected() != 1 {
+		return nil, "", errors.New("invalid or expired refresh token")
 	}
 
 	newToken, err := GenerateRefreshToken()
@@ -162,7 +168,7 @@ func RotateRefreshToken(
 	newTokenHash := hashRefreshToken(newToken)
 	newExpiresAt := time.Now().Add(refreshTokenLifetime)
 
-	if _, err := tx.Exec(
+	_, err = tx.Exec(
 		ctx,
 		`INSERT INTO refresh_tokens
 			(user_id, token_hash, expires_at)
@@ -170,7 +176,8 @@ func RotateRefreshToken(
 		user.ID,
 		newTokenHash,
 		newExpiresAt,
-	); err != nil {
+	)
+	if err != nil {
 		return nil, "", fmt.Errorf("store rotated refresh token: %w", err)
 	}
 
