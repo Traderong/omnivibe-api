@@ -104,11 +104,12 @@ func main() {
 		),
 	)
 
-	http.HandleFunc(
+	http.Handle(
 		"/api/auth/refresh",
-		handlers.Refresh,
+		authRateLimiter.Middleware(
+			http.HandlerFunc(handlers.Refresh),
+		),
 	)
-
 	http.HandleFunc(
 		"/api/auth/logout",
 		handlers.Logout,
