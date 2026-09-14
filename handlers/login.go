@@ -21,7 +21,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	var req auth.LoginRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := DecodeJSON(w, r, &req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -34,13 +34,21 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
 	accessToken, err := auth.GenerateAccessToken(user)
 	if err != nil {
-		http.Error(w, "failed to create access token", http.StatusInternalServerError)
+		http.Error(
+			w,
+			"failed to create access token",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
 	refreshToken, err := auth.CreateRefreshToken(r.Context(), user)
 	if err != nil {
-		http.Error(w, "failed to create refresh token", http.StatusInternalServerError)
+		http.Error(
+			w,
+			"failed to create refresh token",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 

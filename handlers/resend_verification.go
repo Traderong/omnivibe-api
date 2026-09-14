@@ -18,7 +18,7 @@ func ResendVerification(w http.ResponseWriter, r *http.Request) {
 
 	var req auth.ResendVerificationRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := DecodeJSON(w, r, &req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -29,7 +29,11 @@ func ResendVerification(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		if errors.Is(err, auth.ErrEmailAlreadyVerified) {
-			http.Error(w, "email is already verified", http.StatusConflict)
+			http.Error(
+				w,
+				"email is already verified",
+				http.StatusConflict,
+			)
 			return
 		}
 
