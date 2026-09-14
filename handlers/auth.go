@@ -16,12 +16,15 @@ func Register(w http.ResponseWriter, r *http.Request) {
 
 	var req auth.RegisterRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := DecodeJSON(w, r, &req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	user, verificationToken, err := auth.RegisterUser(r.Context(), req)
+	user, verificationToken, err := auth.RegisterUser(
+		r.Context(),
+		req,
+	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -34,7 +37,11 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		user.Username,
 		verificationToken,
 	); err != nil {
-		http.Error(w, "account created but verification email could not be sent", http.StatusInternalServerError)
+		http.Error(
+			w,
+			"account created but verification email could not be sent",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
