@@ -38,6 +38,7 @@ func GetPublicProfileByUsername(
 		FROM users
 		WHERE username = $1
 		  AND is_active = TRUE
+		  AND profile_private = FALSE
 		LIMIT 1
 	`
 

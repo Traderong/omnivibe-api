@@ -11,16 +11,16 @@ import (
 )
 
 type UpdateProfileRequest struct {
-	Username    *string `json:"username"`
-	DisplayName *string `json:"display_name"`
-	Bio         *string `json:"bio"`
-	AvatarURL   *string `json:"avatar_url"`
+	Username       *string `json:"username"`
+	DisplayName    *string `json:"display_name"`
+	Bio            *string `json:"bio"`
+	AvatarURL      *string `json:"avatar_url"`
+	ProfilePrivate *bool   `json:"profile_private"`
 }
 
 func ValidateAvatarURL(value string) error {
 	value = strings.TrimSpace(value)
 
-	// An empty value is allowed so the user can remove their avatar.
 	if value == "" {
 		return nil
 	}
@@ -53,9 +53,7 @@ func validateUsername(value string) error {
 	}
 
 	if len(value) < 3 || len(value) > 30 {
-		return fmt.Errorf(
-			"username must be between 3 and 30 characters",
-		)
+		return fmt.Errorf("username must be between 3 and 30 characters")
 	}
 
 	for _, r := range value {
@@ -100,7 +98,6 @@ func UpdateUserProfile(
 	userID string,
 	req UpdateProfileRequest,
 ) (*User, error) {
-	// Username
 	if req.Username != nil {
 		value := strings.TrimSpace(*req.Username)
 
@@ -111,7 +108,6 @@ func UpdateUserProfile(
 		req.Username = &value
 	}
 
-	// Display name
 	if req.DisplayName != nil {
 		value := strings.TrimSpace(*req.DisplayName)
 
@@ -122,7 +118,6 @@ func UpdateUserProfile(
 		req.DisplayName = &value
 	}
 
-	// Bio
 	if req.Bio != nil {
 		value := strings.TrimSpace(*req.Bio)
 
@@ -133,7 +128,6 @@ func UpdateUserProfile(
 		req.Bio = &value
 	}
 
-	// Avatar URL
 	if req.AvatarURL != nil {
 		value := strings.TrimSpace(*req.AvatarURL)
 
@@ -151,8 +145,9 @@ func UpdateUserProfile(
 			display_name = COALESCE($2, display_name),
 			bio = COALESCE($3, bio),
 			avatar_url = COALESCE($4, avatar_url),
+			profile_private = COALESCE($5, profile_private),
 			updated_at = NOW()
-		WHERE id = $5
+		WHERE id = $6
 		RETURNING
 			id,
 			username,
@@ -162,6 +157,7 @@ func UpdateUserProfile(
 			avatar_url,
 			is_verified,
 			is_active,
+			profile_private,
 			email_verified_at,
 			created_at,
 			updated_at
@@ -176,6 +172,7 @@ func UpdateUserProfile(
 		req.DisplayName,
 		req.Bio,
 		req.AvatarURL,
+		req.ProfilePrivate,
 		userID,
 	).Scan(
 		&user.ID,
@@ -186,6 +183,7 @@ func UpdateUserProfile(
 		&user.AvatarURL,
 		&user.IsVerified,
 		&user.IsActive,
+		&user.ProfilePrivate,
 		&user.EmailVerifiedAt,
 		&user.CreatedAt,
 		&user.UpdatedAt,

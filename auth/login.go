@@ -64,6 +64,7 @@ func LoginUser(ctx context.Context, req LoginRequest) (*User, error) {
 			avatar_url,
 			is_verified,
 			is_active,
+			profile_private,
 			email_verified_at,
 			created_at,
 			updated_at
@@ -86,6 +87,7 @@ func LoginUser(ctx context.Context, req LoginRequest) (*User, error) {
 		&user.AvatarURL,
 		&user.IsVerified,
 		&user.IsActive,
+		&user.ProfilePrivate,
 		&user.EmailVerifiedAt,
 		&user.CreatedAt,
 		&user.UpdatedAt,
