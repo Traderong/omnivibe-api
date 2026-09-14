@@ -23,7 +23,7 @@ func GenerateAccessToken(user *User) (string, error) {
 		"username": user.Username,
 		"email":    user.Email,
 		"iat":      now.Unix(),
-		"exp":      now.Add(24 * time.Hour).Unix(),
+		"exp":      now.Add(15 * time.Minute).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

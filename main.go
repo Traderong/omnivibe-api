@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/Traderong/omnivibe-api/auth"
 	"github.com/Traderong/omnivibe-api/database"
@@ -20,6 +22,28 @@ func main() {
 		log.Fatal("Database connection failed:", err)
 	}
 	defer db.Close()
+	cleanupRefreshTokens := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := auth.CleanupRefreshTokens(ctx); err != nil {
+			log.Printf("refresh token cleanup failed: %v", err)
+			return
+		}
+
+		log.Println("refresh token cleanup completed")
+	}
+
+	cleanupRefreshTokens()
+
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			cleanupRefreshTokens()
+		}
+	}()
 
 	http.HandleFunc("/api/auth/register", handlers.Register)
 	http.HandleFunc("/api/auth/login", handlers.Login)
