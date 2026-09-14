@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Traderong/omnivibe-api/auth"
@@ -21,14 +22,12 @@ func main() {
 		log.Println("No .env file found; using system environment variables")
 	}
 
-	// Validate application configuration before starting the server.
+	// Validate application configuration.
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal("Configuration error:", err)
 	}
 
-	// The individual packages currently read environment variables directly.
-	// Keep the validated configuration referenced for now.
 	_ = cfg
 
 	log.Println("Configuration validated successfully")
@@ -40,7 +39,7 @@ func main() {
 	}
 	defer db.Close()
 
-	// Run database migrations before accepting requests.
+	// Run database migrations.
 	migrationCtx, migrationCancel := context.WithTimeout(
 		context.Background(),
 		30*time.Second,
@@ -53,7 +52,7 @@ func main() {
 
 	log.Println("Database migrations completed")
 
-	// Remove expired and long-revoked refresh tokens at startup.
+	// Refresh-token cleanup.
 	cleanupRefreshTokens := func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(
 			context.Background(),
@@ -71,7 +70,6 @@ func main() {
 
 	cleanupRefreshTokens()
 
-	// Run refresh-token cleanup every 24 hours.
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -81,11 +79,9 @@ func main() {
 		}
 	}()
 
-	// Authentication rate limiter:
-	// Maximum 10 requests per IP address per minute.
+	// Authentication rate limiter.
 	authRateLimiter := middleware.NewRateLimiter(10, time.Minute)
 
-	// Clean inactive rate-limit entries periodically.
 	go func() {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
@@ -95,7 +91,9 @@ func main() {
 		}
 	}()
 
-	// Authentication endpoints.
+	// ------------------------------------------------------------
+	// Authentication endpoints
+	// ------------------------------------------------------------
 
 	http.Handle(
 		"/api/auth/register",
@@ -153,14 +151,9 @@ func main() {
 		),
 	)
 
-	// Public profile endpoint.
-
-	http.HandleFunc(
-		"/api/users/",
-		handlers.PublicProfile,
-	)
-
-	// Authenticated endpoints.
+	// ------------------------------------------------------------
+	// Authenticated account endpoints
+	// ------------------------------------------------------------
 
 	http.Handle(
 		"/api/me",
@@ -183,7 +176,73 @@ func main() {
 		),
 	)
 
-	// Apply a 1 MB request-body limit to every registered endpoint.
+	// ------------------------------------------------------------
+	// User/profile/follow routes
+	// ------------------------------------------------------------
+
+	http.HandleFunc(
+		"/api/users/",
+		func(w http.ResponseWriter, r *http.Request) {
+			path := strings.TrimSuffix(r.URL.Path, "/")
+
+			// Follow status:
+			// GET /api/users/{username}/follow-status
+			if strings.HasSuffix(path, "/follow-status") {
+				auth.AuthMiddleware(
+					http.HandlerFunc(handlers.FollowStatus),
+				).ServeHTTP(w, r)
+				return
+			}
+
+			// Follow/unfollow:
+			// POST   /api/users/{username}/follow
+			// DELETE /api/users/{username}/follow
+			if strings.HasSuffix(path, "/follow") {
+				auth.AuthMiddleware(
+					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						switch r.Method {
+						case http.MethodPost:
+							handlers.FollowUser(w, r)
+
+						case http.MethodDelete:
+							handlers.UnfollowUser(w, r)
+
+						default:
+							http.Error(
+								w,
+								"method not allowed",
+								http.StatusMethodNotAllowed,
+							)
+						}
+					}),
+				).ServeHTTP(w, r)
+				return
+			}
+
+			// Followers:
+			// GET /api/users/{username}/followers
+			if strings.HasSuffix(path, "/followers") {
+				handlers.Followers(w, r)
+				return
+			}
+
+			// Following:
+			// GET /api/users/{username}/following
+			if strings.HasSuffix(path, "/following") {
+				handlers.Following(w, r)
+				return
+			}
+
+			// Public profile:
+			// GET /api/users/{username}
+			handlers.PublicProfile(w, r)
+		},
+	)
+
+	// ------------------------------------------------------------
+	// Global request-body limit
+	// ------------------------------------------------------------
+
 	rootHandler := middleware.BodyLimit(http.DefaultServeMux)
 
 	server := &http.Server{
