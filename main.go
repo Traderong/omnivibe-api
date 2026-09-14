@@ -34,7 +34,7 @@ func main() {
 	log.Println("Configuration validated successfully")
 
 	// Connect to PostgreSQL.
-	db, err := database.Connect()
+	db, err := database.Connect(cfg)
 	if err != nil {
 		log.Fatal("Database connection failed:", err)
 	}
