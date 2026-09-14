@@ -10,13 +10,13 @@ import (
 
 var ErrInvalidRegistration = errors.New("invalid registration data")
 
-func RegisterUser(ctx context.Context, req RegisterRequest) (*User, error) {
+func RegisterUser(ctx context.Context, req RegisterRequest) (*User, string, error) {
 	req.Username = strings.TrimSpace(req.Username)
 	req.Email = strings.TrimSpace(req.Email)
 	req.DisplayName = strings.TrimSpace(req.DisplayName)
 
 	if err := ValidateRegisterRequest(req); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	passwordHash, err := bcrypt.GenerateFromPassword(
@@ -24,7 +24,7 @@ func RegisterUser(ctx context.Context, req RegisterRequest) (*User, error) {
 		bcrypt.DefaultCost,
 	)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	user, err := CreateUser(
@@ -35,12 +35,12 @@ func RegisterUser(ctx context.Context, req RegisterRequest) (*User, error) {
 		string(passwordHash),
 	)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	verificationToken, err := GenerateVerificationToken()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if err := SaveVerificationToken(
@@ -48,8 +48,8 @@ func RegisterUser(ctx context.Context, req RegisterRequest) (*User, error) {
 		user.ID.String(),
 		verificationToken,
 	); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return user, nil
+	return user, verificationToken, nil
 }
