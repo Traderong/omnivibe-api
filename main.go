@@ -9,6 +9,7 @@ import (
 	"github.com/Traderong/omnivibe-api/auth"
 	"github.com/Traderong/omnivibe-api/database"
 	"github.com/Traderong/omnivibe-api/handlers"
+	"github.com/Traderong/omnivibe-api/middleware"
 	"github.com/joho/godotenv"
 )
 
@@ -22,6 +23,7 @@ func main() {
 		log.Fatal("Database connection failed:", err)
 	}
 	defer db.Close()
+
 	cleanupRefreshTokens := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -45,12 +47,37 @@ func main() {
 		}
 	}()
 
-	http.HandleFunc("/api/auth/register", handlers.Register)
-	http.HandleFunc("/api/auth/login", handlers.Login)
+	// Authentication rate limiter:
+	// Maximum 10 requests per IP address per minute.
+	authRateLimiter := middleware.NewRateLimiter(10, time.Minute)
+
+	http.Handle(
+		"/api/auth/register",
+		authRateLimiter.Middleware(http.HandlerFunc(handlers.Register)),
+	)
+
+	http.Handle(
+		"/api/auth/login",
+		authRateLimiter.Middleware(http.HandlerFunc(handlers.Login)),
+	)
+
 	http.HandleFunc("/api/auth/verify-email", handlers.VerifyEmail)
-	http.HandleFunc("/api/auth/resend-verification", handlers.ResendVerification)
-	http.HandleFunc("/api/auth/forgot-password", handlers.ForgotPassword)
-	http.HandleFunc("/api/auth/reset-password", handlers.ResetPassword)
+
+	http.Handle(
+		"/api/auth/resend-verification",
+		authRateLimiter.Middleware(http.HandlerFunc(handlers.ResendVerification)),
+	)
+
+	http.Handle(
+		"/api/auth/forgot-password",
+		authRateLimiter.Middleware(http.HandlerFunc(handlers.ForgotPassword)),
+	)
+
+	http.Handle(
+		"/api/auth/reset-password",
+		authRateLimiter.Middleware(http.HandlerFunc(handlers.ResetPassword)),
+	)
+
 	http.HandleFunc("/api/auth/refresh", handlers.Refresh)
 	http.HandleFunc("/api/auth/logout", handlers.Logout)
 
