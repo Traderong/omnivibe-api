@@ -23,15 +23,22 @@ func ChangeUserPassword(
 		return errors.New("current password is required")
 	}
 
-	if len(req.NewPassword) < 8 {
-		return errors.New("new password must be at least 8 characters")
+	if err := ValidateResetPassword(req.NewPassword); err != nil {
+		return err
+	}
+
+	if req.CurrentPassword == req.NewPassword {
+		return errors.New("new password must be different from current password")
 	}
 
 	var currentHash string
 
 	err := database.DB.QueryRow(
 		ctx,
-		`SELECT password_hash FROM users WHERE id = $1 LIMIT 1`,
+		`SELECT password_hash
+		 FROM users
+		 WHERE id = $1
+		 LIMIT 1`,
 		userID,
 	).Scan(&currentHash)
 
@@ -56,7 +63,10 @@ func ChangeUserPassword(
 
 	_, err = database.DB.Exec(
 		ctx,
-		`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+		`UPDATE users
+		 SET password_hash = $1,
+		     updated_at = NOW()
+		 WHERE id = $2`,
 		string(newHash),
 		userID,
 	)
