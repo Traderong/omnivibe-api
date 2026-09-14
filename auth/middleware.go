@@ -21,14 +21,24 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		authHeader := r.Header.Get("Authorization")
 
 		if authHeader == "" {
-			http.Error(w, "authentication required", http.StatusUnauthorized)
+			http.Error(
+				w,
+				"authentication required",
+				http.StatusUnauthorized,
+			)
 			return
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
+		parts := strings.Fields(authHeader)
 
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			http.Error(w, "invalid authorization header", http.StatusUnauthorized)
+		if len(parts) != 2 ||
+			!strings.EqualFold(parts[0], "Bearer") ||
+			parts[1] == "" {
+			http.Error(
+				w,
+				"invalid authorization header",
+				http.StatusUnauthorized,
+			)
 			return
 		}
 
@@ -36,30 +46,53 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		secret := os.Getenv("JWT_SECRET")
 		if secret == "" {
-			http.Error(w, "server authentication configuration error", http.StatusInternalServerError)
+			http.Error(
+				w,
+				"server authentication configuration error",
+				http.StatusInternalServerError,
+			)
 			return
 		}
 
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if token.Method != jwt.SigningMethodHS256 {
-				return nil, errors.New("unexpected signing method")
-			}
+		claims := &jwt.RegisteredClaims{}
 
-			return []byte(secret), nil
-		})
+		token, err := jwt.ParseWithClaims(
+			tokenString,
+			claims,
+			func(token *jwt.Token) (interface{}, error) {
+				if token.Method != jwt.SigningMethodHS256 {
+					return nil, errors.New("unexpected signing method")
+				}
+
+				return []byte(secret), nil
+			},
+			jwt.WithIssuer(jwtIssuer()),
+			jwt.WithAudience(jwtAudience()),
+		)
 
 		if err != nil || !token.Valid {
-			http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+			http.Error(
+				w,
+				"invalid or expired token",
+				http.StatusUnauthorized,
+			)
 			return
 		}
 
-		userID, err := token.Claims.GetSubject()
-		if err != nil || userID == "" {
-			http.Error(w, "invalid token subject", http.StatusUnauthorized)
+		if claims.Subject == "" {
+			http.Error(
+				w,
+				"invalid token subject",
+				http.StatusUnauthorized,
+			)
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), userIDContextKey, userID)
+		ctx := context.WithValue(
+			r.Context(),
+			userIDContextKey,
+			claims.Subject,
+		)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -67,5 +100,6 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 func UserIDFromContext(ctx context.Context) (string, bool) {
 	userID, ok := ctx.Value(userIDContextKey).(string)
+
 	return userID, ok
 }
