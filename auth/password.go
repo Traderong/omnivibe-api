@@ -61,7 +61,13 @@ func ChangeUserPassword(
 		return fmt.Errorf("hash new password: %w", err)
 	}
 
-	_, err = database.DB.Exec(
+	tx, err := database.DB.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin password change transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(
 		ctx,
 		`UPDATE users
 		 SET password_hash = $1,
@@ -70,9 +76,25 @@ func ChangeUserPassword(
 		string(newHash),
 		userID,
 	)
-
 	if err != nil {
 		return fmt.Errorf("update password: %w", err)
+	}
+
+	// Revoke every existing refresh-token session.
+	_, err = tx.Exec(
+		ctx,
+		`UPDATE refresh_tokens
+		 SET revoked_at = NOW()
+		 WHERE user_id = $1
+		   AND revoked_at IS NULL`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("revoke refresh tokens: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit password change: %w", err)
 	}
 
 	return nil
