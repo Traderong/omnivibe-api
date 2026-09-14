@@ -175,6 +175,30 @@ func main() {
 			http.HandlerFunc(handlers.ChangePassword),
 		),
 	)
+	// ------------------------------------------------------------
+	// Post routes
+	// ------------------------------------------------------------
+
+	http.Handle(
+		"/api/posts",
+		auth.AuthMiddleware(
+			http.HandlerFunc(handlers.CreatePost),
+		),
+	)
+
+	http.HandleFunc(
+		"/api/posts/",
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodDelete {
+				auth.AuthMiddleware(
+					http.HandlerFunc(handlers.DeletePost),
+				).ServeHTTP(w, r)
+				return
+			}
+
+			handlers.GetPost(w, r)
+		},
+	)
 
 	// ------------------------------------------------------------
 	// User/profile/follow routes
@@ -239,7 +263,10 @@ func main() {
 				handlers.Following(w, r)
 				return
 			}
-
+			if strings.HasSuffix(path, "/posts") {
+				handlers.GetUserPosts(w, r)
+				return
+			}
 			// Public profile:
 			// GET /api/users/{username}
 			handlers.PublicProfile(w, r)
