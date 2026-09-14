@@ -25,7 +25,10 @@ func main() {
 	defer db.Close()
 
 	cleanupRefreshTokens := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(
+			context.Background(),
+			10*time.Second,
+		)
 		defer cancel()
 
 		if err := auth.CleanupRefreshTokens(ctx); err != nil {
@@ -51,49 +54,104 @@ func main() {
 	// Maximum 10 requests per IP address per minute.
 	authRateLimiter := middleware.NewRateLimiter(10, time.Minute)
 
+	// Clean inactive rate-limit entries periodically.
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			authRateLimiter.Cleanup(30 * time.Minute)
+		}
+	}()
+
 	http.Handle(
 		"/api/auth/register",
-		authRateLimiter.Middleware(http.HandlerFunc(handlers.Register)),
+		authRateLimiter.Middleware(
+			http.HandlerFunc(handlers.Register),
+		),
 	)
 
 	http.Handle(
 		"/api/auth/login",
-		authRateLimiter.Middleware(http.HandlerFunc(handlers.Login)),
+		authRateLimiter.Middleware(
+			http.HandlerFunc(handlers.Login),
+		),
 	)
 
-	http.HandleFunc("/api/auth/verify-email", handlers.VerifyEmail)
+	http.HandleFunc(
+		"/api/auth/verify-email",
+		handlers.VerifyEmail,
+	)
 
 	http.Handle(
 		"/api/auth/resend-verification",
-		authRateLimiter.Middleware(http.HandlerFunc(handlers.ResendVerification)),
+		authRateLimiter.Middleware(
+			http.HandlerFunc(handlers.ResendVerification),
+		),
 	)
 
 	http.Handle(
 		"/api/auth/forgot-password",
-		authRateLimiter.Middleware(http.HandlerFunc(handlers.ForgotPassword)),
+		authRateLimiter.Middleware(
+			http.HandlerFunc(handlers.ForgotPassword),
+		),
 	)
 
 	http.Handle(
 		"/api/auth/reset-password",
-		authRateLimiter.Middleware(http.HandlerFunc(handlers.ResetPassword)),
+		authRateLimiter.Middleware(
+			http.HandlerFunc(handlers.ResetPassword),
+		),
 	)
 
-	http.HandleFunc("/api/auth/refresh", handlers.Refresh)
-	http.HandleFunc("/api/auth/logout", handlers.Logout)
+	http.HandleFunc(
+		"/api/auth/refresh",
+		handlers.Refresh,
+	)
+
+	http.HandleFunc(
+		"/api/auth/logout",
+		handlers.Logout,
+	)
 
 	meHandler := http.HandlerFunc(handlers.Me)
-	http.Handle("/api/me", auth.AuthMiddleware(meHandler))
+
+	http.Handle(
+		"/api/me",
+		auth.AuthMiddleware(meHandler),
+	)
 
 	updateProfileHandler := http.HandlerFunc(handlers.UpdateProfile)
-	http.Handle("/api/me/profile", auth.AuthMiddleware(updateProfileHandler))
+
+	http.Handle(
+		"/api/me/profile",
+		auth.AuthMiddleware(updateProfileHandler),
+	)
 
 	changePasswordHandler := http.HandlerFunc(handlers.ChangePassword)
-	http.Handle("/api/me/password", auth.AuthMiddleware(changePasswordHandler))
+
+	http.Handle(
+		"/api/me/password",
+		auth.AuthMiddleware(changePasswordHandler),
+	)
+
+	// Apply a 1 MB request-body limit to every registered endpoint.
+	rootHandler := middleware.BodyLimit(http.DefaultServeMux)
+
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           rootHandler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    32 * 1024,
+	}
 
 	log.Println("OmniVibe backend started on http://localhost:8080")
 	log.Println("PostgreSQL connected successfully")
 
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal("HTTP server failed:", err)
 	}
 }
