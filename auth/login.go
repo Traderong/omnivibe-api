@@ -1,10 +1,10 @@
-
 package auth
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"net/mail"
 	"strings"
 
 	"github.com/Traderong/omnivibe-api/database"
@@ -18,10 +18,33 @@ type LoginRequest struct {
 
 var ErrInvalidCredentials = errors.New("invalid email or password")
 
+func ValidateLoginRequest(req LoginRequest) error {
+	email := strings.TrimSpace(req.Email)
+
+	if email == "" || req.Password == "" {
+		return ErrInvalidCredentials
+	}
+
+	if len(email) > 255 {
+		return ErrInvalidCredentials
+	}
+
+	parsedEmail, err := mail.ParseAddress(email)
+	if err != nil || parsedEmail.Address != email {
+		return ErrInvalidCredentials
+	}
+
+	if len(req.Password) > 72 {
+		return ErrInvalidCredentials
+	}
+
+	return nil
+}
+
 func LoginUser(ctx context.Context, req LoginRequest) (*User, error) {
 	req.Email = strings.TrimSpace(req.Email)
 
-	if req.Email == "" || req.Password == "" {
+	if err := ValidateLoginRequest(req); err != nil {
 		return nil, ErrInvalidCredentials
 	}
 
