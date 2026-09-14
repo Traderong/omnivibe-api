@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/Traderong/omnivibe-api/database"
@@ -12,6 +13,34 @@ type UpdateProfileRequest struct {
 	DisplayName *string `json:"display_name"`
 	Bio         *string `json:"bio"`
 	AvatarURL   *string `json:"avatar_url"`
+}
+
+func ValidateAvatarURL(value string) error {
+	value = strings.TrimSpace(value)
+
+	// Allow an empty value so the user can remove their avatar.
+	if value == "" {
+		return nil
+	}
+
+	if len(value) > 2048 {
+		return fmt.Errorf("avatar URL is too long")
+	}
+
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil {
+		return fmt.Errorf("invalid avatar URL")
+	}
+
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("avatar URL must use http or https")
+	}
+
+	if parsed.Host == "" {
+		return fmt.Errorf("avatar URL must include a valid host")
+	}
+
+	return nil
 }
 
 func UpdateUserProfile(
@@ -27,7 +56,9 @@ func UpdateUserProfile(
 		}
 
 		if len(value) < 2 || len(value) > 100 {
-			return nil, fmt.Errorf("display name must be between 2 and 100 characters")
+			return nil, fmt.Errorf(
+				"display name must be between 2 and 100 characters",
+			)
 		}
 
 		req.DisplayName = &value
@@ -46,8 +77,8 @@ func UpdateUserProfile(
 	if req.AvatarURL != nil {
 		value := strings.TrimSpace(*req.AvatarURL)
 
-		if len(value) > 2048 {
-			return nil, fmt.Errorf("avatar URL is too long")
+		if err := ValidateAvatarURL(value); err != nil {
+			return nil, err
 		}
 
 		req.AvatarURL = &value
