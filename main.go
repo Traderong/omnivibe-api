@@ -219,6 +219,13 @@ func main() {
 				return
 			}
 
+			// Profile statistics:
+			// GET /api/users/{username}/stats
+			if strings.HasSuffix(path, "/stats") {
+				handlers.FollowStats(w, r)
+				return
+			}
+
 			// Followers:
 			// GET /api/users/{username}/followers
 			if strings.HasSuffix(path, "/followers") {
@@ -238,7 +245,6 @@ func main() {
 			handlers.PublicProfile(w, r)
 		},
 	)
-
 	// ------------------------------------------------------------
 	// Global request-body limit
 	// ------------------------------------------------------------

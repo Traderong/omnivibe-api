@@ -270,3 +270,39 @@ func GetFollowing(
 
 	return users, nil
 }
+
+type FollowStats struct {
+	FollowersCount int64 `json:"followers_count"`
+	FollowingCount int64 `json:"following_count"`
+}
+
+func GetFollowStats(
+	ctx context.Context,
+	username string,
+) (*FollowStats, error) {
+	targetID, err := GetUserIDByUsername(ctx, username)
+	if err != nil {
+		return nil, err
+	}
+
+	stats := &FollowStats{}
+
+	err = database.DB.QueryRow(
+		ctx,
+		`
+		SELECT
+			COUNT(*) FILTER (WHERE following_id = $1),
+			COUNT(*) FILTER (WHERE follower_id = $1)
+		FROM follows
+		`,
+		targetID,
+	).Scan(
+		&stats.FollowersCount,
+		&stats.FollowingCount,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get follow stats: %w", err)
+	}
+
+	return stats, nil
+}

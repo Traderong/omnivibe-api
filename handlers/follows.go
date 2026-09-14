@@ -266,3 +266,44 @@ func Following(w http.ResponseWriter, r *http.Request) {
 
 	_ = json.NewEncoder(w).Encode(users)
 }
+func FollowStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	username := extractUsername(
+		r.URL.Path,
+		"/api/users/",
+	)
+
+	username = strings.TrimSuffix(username, "/stats")
+
+	if username == "" || strings.Contains(username, "/") {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+
+	stats, err := auth.GetFollowStats(
+		r.Context(),
+		username,
+	)
+	if err != nil {
+		if errors.Is(err, auth.ErrFollowUserNotFound) {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+
+		http.Error(
+			w,
+			"failed to get profile stats",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	_ = json.NewEncoder(w).Encode(stats)
+}
