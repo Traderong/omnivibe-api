@@ -153,6 +153,13 @@ func main() {
 		),
 	)
 
+	// Public profile endpoint.
+
+	http.HandleFunc(
+		"/api/users/",
+		handlers.PublicProfile,
+	)
+
 	// Authenticated endpoints.
 
 	http.Handle(

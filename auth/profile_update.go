@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"unicode"
 
 	"github.com/Traderong/omnivibe-api/database"
 )
 
 type UpdateProfileRequest struct {
+	Username    *string `json:"username"`
 	DisplayName *string `json:"display_name"`
 	Bio         *string `json:"bio"`
 	AvatarURL   *string `json:"avatar_url"`
@@ -18,7 +20,7 @@ type UpdateProfileRequest struct {
 func ValidateAvatarURL(value string) error {
 	value = strings.TrimSpace(value)
 
-	// Allow an empty value so the user can remove their avatar.
+	// An empty value is allowed so the user can remove their avatar.
 	if value == "" {
 		return nil
 	}
@@ -43,37 +45,95 @@ func ValidateAvatarURL(value string) error {
 	return nil
 }
 
+func validateUsername(value string) error {
+	value = strings.TrimSpace(value)
+
+	if value == "" {
+		return fmt.Errorf("username cannot be empty")
+	}
+
+	if len(value) < 3 || len(value) > 30 {
+		return fmt.Errorf(
+			"username must be between 3 and 30 characters",
+		)
+	}
+
+	for _, r := range value {
+		if !unicode.IsLetter(r) &&
+			!unicode.IsDigit(r) &&
+			r != '_' {
+			return fmt.Errorf(
+				"username can only contain letters, numbers, and underscores",
+			)
+		}
+	}
+
+	return nil
+}
+
+func validateDisplayName(value string) error {
+	value = strings.TrimSpace(value)
+
+	if value == "" {
+		return fmt.Errorf("display name cannot be empty")
+	}
+
+	if len(value) < 2 || len(value) > 100 {
+		return fmt.Errorf(
+			"display name must be between 2 and 100 characters",
+		)
+	}
+
+	return nil
+}
+
+func validateBio(value string) error {
+	if len(value) > 500 {
+		return fmt.Errorf("bio cannot exceed 500 characters")
+	}
+
+	return nil
+}
+
 func UpdateUserProfile(
 	ctx context.Context,
 	userID string,
 	req UpdateProfileRequest,
 ) (*User, error) {
+	// Username
+	if req.Username != nil {
+		value := strings.TrimSpace(*req.Username)
+
+		if err := validateUsername(value); err != nil {
+			return nil, err
+		}
+
+		req.Username = &value
+	}
+
+	// Display name
 	if req.DisplayName != nil {
 		value := strings.TrimSpace(*req.DisplayName)
 
-		if value == "" {
-			return nil, fmt.Errorf("display name cannot be empty")
-		}
-
-		if len(value) < 2 || len(value) > 100 {
-			return nil, fmt.Errorf(
-				"display name must be between 2 and 100 characters",
-			)
+		if err := validateDisplayName(value); err != nil {
+			return nil, err
 		}
 
 		req.DisplayName = &value
 	}
 
+	// Bio
 	if req.Bio != nil {
 		value := strings.TrimSpace(*req.Bio)
 
-		if len(value) > 500 {
-			return nil, fmt.Errorf("bio cannot exceed 500 characters")
+		if err := validateBio(value); err != nil {
+			return nil, err
 		}
 
 		req.Bio = &value
 	}
 
+	// Avatar URL
 	if req.AvatarURL != nil {
 		value := strings.TrimSpace(*req.AvatarURL)
 
@@ -87,11 +147,12 @@ func UpdateUserProfile(
 	query := `
 		UPDATE users
 		SET
-			display_name = COALESCE($1, display_name),
-			bio = COALESCE($2, bio),
-			avatar_url = COALESCE($3, avatar_url),
+			username = COALESCE($1, username),
+			display_name = COALESCE($2, display_name),
+			bio = COALESCE($3, bio),
+			avatar_url = COALESCE($4, avatar_url),
 			updated_at = NOW()
-		WHERE id = $4
+		WHERE id = $5
 		RETURNING
 			id,
 			username,
@@ -111,6 +172,7 @@ func UpdateUserProfile(
 	err := database.DB.QueryRow(
 		ctx,
 		query,
+		req.Username,
 		req.DisplayName,
 		req.Bio,
 		req.AvatarURL,
@@ -130,6 +192,13 @@ func UpdateUserProfile(
 	)
 
 	if err != nil {
+		errText := strings.ToLower(err.Error())
+
+		if strings.Contains(errText, "duplicate key") &&
+			strings.Contains(errText, "username") {
+			return nil, fmt.Errorf("username is already taken")
+		}
+
 		return nil, fmt.Errorf("update profile: %w", err)
 	}
 
