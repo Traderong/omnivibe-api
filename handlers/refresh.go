@@ -24,7 +24,7 @@ func Refresh(w http.ResponseWriter, r *http.Request) {
 
 	var req RefreshRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := DecodeJSON(w, r, &req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -61,12 +61,15 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 
 	var req RefreshRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := DecodeJSON(w, r, &req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if err := auth.RevokeRefreshToken(r.Context(), req.RefreshToken); err != nil {
+	if err := auth.RevokeRefreshToken(
+		r.Context(),
+		req.RefreshToken,
+	); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
