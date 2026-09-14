@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Traderong/omnivibe-api/auth"
+	"github.com/Traderong/omnivibe-api/config"
 	"github.com/Traderong/omnivibe-api/database"
 	"github.com/Traderong/omnivibe-api/handlers"
 	"github.com/Traderong/omnivibe-api/middleware"
@@ -15,35 +16,52 @@ import (
 )
 
 func main() {
+	// Load environment variables from .env when available.
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found; using system environment variables")
 	}
 
+	// Validate application configuration before starting the server.
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal("Configuration error:", err)
+	}
+
+	// The individual packages currently read environment variables directly.
+	// Keep the validated configuration referenced for now.
+	_ = cfg
+
+	log.Println("Configuration validated successfully")
+
+	// Connect to PostgreSQL.
 	db, err := database.Connect()
 	if err != nil {
 		log.Fatal("Database connection failed:", err)
 	}
 	defer db.Close()
-	ctx, cancel := context.WithTimeout(
+
+	// Run database migrations before accepting requests.
+	migrationCtx, migrationCancel := context.WithTimeout(
 		context.Background(),
 		30*time.Second,
 	)
-	defer cancel()
+	defer migrationCancel()
 
-	if err := migrations.Run(ctx, db); err != nil {
+	if err := migrations.Run(migrationCtx, db); err != nil {
 		log.Fatal("Database migrations failed:", err)
 	}
 
 	log.Println("Database migrations completed")
 
+	// Remove expired and long-revoked refresh tokens at startup.
 	cleanupRefreshTokens := func() {
-		ctx, cancel := context.WithTimeout(
+		cleanupCtx, cleanupCancel := context.WithTimeout(
 			context.Background(),
 			10*time.Second,
 		)
-		defer cancel()
+		defer cleanupCancel()
 
-		if err := auth.CleanupRefreshTokens(ctx); err != nil {
+		if err := auth.CleanupRefreshTokens(cleanupCtx); err != nil {
 			log.Printf("refresh token cleanup failed: %v", err)
 			return
 		}
@@ -53,6 +71,7 @@ func main() {
 
 	cleanupRefreshTokens()
 
+	// Run refresh-token cleanup every 24 hours.
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -76,6 +95,8 @@ func main() {
 		}
 	}()
 
+	// Authentication endpoints.
+
 	http.Handle(
 		"/api/auth/register",
 		authRateLimiter.Middleware(
@@ -90,9 +111,11 @@ func main() {
 		),
 	)
 
-	http.HandleFunc(
+	http.Handle(
 		"/api/auth/verify-email",
-		handlers.VerifyEmail,
+		authRateLimiter.Middleware(
+			http.HandlerFunc(handlers.VerifyEmail),
+		),
 	)
 
 	http.Handle(
@@ -122,30 +145,35 @@ func main() {
 			http.HandlerFunc(handlers.Refresh),
 		),
 	)
-	http.HandleFunc(
+
+	http.Handle(
 		"/api/auth/logout",
-		handlers.Logout,
+		authRateLimiter.Middleware(
+			http.HandlerFunc(handlers.Logout),
+		),
 	)
 
-	meHandler := http.HandlerFunc(handlers.Me)
+	// Authenticated endpoints.
 
 	http.Handle(
 		"/api/me",
-		auth.AuthMiddleware(meHandler),
+		auth.AuthMiddleware(
+			http.HandlerFunc(handlers.Me),
+		),
 	)
-
-	updateProfileHandler := http.HandlerFunc(handlers.UpdateProfile)
 
 	http.Handle(
 		"/api/me/profile",
-		auth.AuthMiddleware(updateProfileHandler),
+		auth.AuthMiddleware(
+			http.HandlerFunc(handlers.UpdateProfile),
+		),
 	)
-
-	changePasswordHandler := http.HandlerFunc(handlers.ChangePassword)
 
 	http.Handle(
 		"/api/me/password",
-		auth.AuthMiddleware(changePasswordHandler),
+		auth.AuthMiddleware(
+			http.HandlerFunc(handlers.ChangePassword),
+		),
 	)
 
 	// Apply a 1 MB request-body limit to every registered endpoint.
