@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/Traderong/omnivibe-api/database"
 	"golang.org/x/crypto/bcrypt"
@@ -32,6 +33,56 @@ func GeneratePasswordResetToken() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
+func ValidateResetPassword(password string) error {
+	if password == "" {
+		return errors.New("new password is required")
+	}
+
+	if len(password) < 8 {
+		return errors.New("new password must be at least 8 characters")
+	}
+
+	if len(password) > 72 {
+		return errors.New("new password must not exceed 72 characters")
+	}
+
+	var hasUpper bool
+	var hasLower bool
+	var hasNumber bool
+	var hasSpecial bool
+
+	for _, r := range password {
+		switch {
+		case unicode.IsUpper(r):
+			hasUpper = true
+		case unicode.IsLower(r):
+			hasLower = true
+		case unicode.IsDigit(r):
+			hasNumber = true
+		case unicode.IsPunct(r) || unicode.IsSymbol(r):
+			hasSpecial = true
+		}
+	}
+
+	if !hasUpper {
+		return errors.New("new password must contain at least one uppercase letter")
+	}
+
+	if !hasLower {
+		return errors.New("new password must contain at least one lowercase letter")
+	}
+
+	if !hasNumber {
+		return errors.New("new password must contain at least one number")
+	}
+
+	if !hasSpecial {
+		return errors.New("new password must contain at least one special character")
+	}
+
+	return nil
+}
+
 func RequestPasswordReset(
 	ctx context.Context,
 	email string,
@@ -44,7 +95,7 @@ func RequestPasswordReset(
 
 	user, err := GetUserByEmail(ctx, email)
 	if err != nil {
-		// Avoid revealing whether an email exists.
+		// Do not reveal whether an account exists.
 		return nil, "", nil
 	}
 
@@ -83,8 +134,8 @@ func ResetUserPassword(
 		return errors.New("reset token is required")
 	}
 
-	if len(req.NewPassword) < 8 {
-		return errors.New("new password must be at least 8 characters")
+	if err := ValidateResetPassword(req.NewPassword); err != nil {
+		return err
 	}
 
 	var userID string
