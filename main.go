@@ -10,6 +10,7 @@ import (
 	"github.com/Traderong/omnivibe-api/database"
 	"github.com/Traderong/omnivibe-api/handlers"
 	"github.com/Traderong/omnivibe-api/middleware"
+	"github.com/Traderong/omnivibe-api/migrations"
 	"github.com/joho/godotenv"
 )
 
@@ -23,6 +24,17 @@ func main() {
 		log.Fatal("Database connection failed:", err)
 	}
 	defer db.Close()
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		30*time.Second,
+	)
+	defer cancel()
+
+	if err := migrations.Run(ctx, db); err != nil {
+		log.Fatal("Database migrations failed:", err)
+	}
+
+	log.Println("Database migrations completed")
 
 	cleanupRefreshTokens := func() {
 		ctx, cancel := context.WithTimeout(
