@@ -21,6 +21,7 @@ var (
 type PostEngagement struct {
 	LikesCount     int64 `json:"likes_count"`
 	FavoritesCount int64 `json:"favorites_count"`
+	CommentsCount  int64 `json:"comments_count"`
 	Liked          bool  `json:"liked"`
 	Favorited      bool  `json:"favorited"`
 }
@@ -98,6 +99,54 @@ func LikePost(
 		}
 
 		return fmt.Errorf("like post: %w", err)
+	}
+
+	// Find the owner of the post.
+	var postOwnerID string
+
+	err = database.DB.QueryRow(
+		ctx,
+		`
+		SELECT user_id::text
+		FROM posts
+		WHERE id = $1
+		`,
+		id,
+	).Scan(&postOwnerID)
+
+	if err != nil {
+		return fmt.Errorf("get post owner: %w", err)
+	}
+
+	// Find the username of the user who liked the post.
+	var actorUsername string
+
+	err = database.DB.QueryRow(
+		ctx,
+		`
+		SELECT username
+		FROM users
+		WHERE id = $1
+		`,
+		userID,
+	).Scan(&actorUsername)
+
+	if err != nil {
+		return fmt.Errorf("get actor username: %w", err)
+	}
+
+	// Create a notification for the post owner.
+	// CreateNotification automatically skips self-notifications.
+	if err := CreateNotification(
+		ctx,
+		postOwnerID,
+		userID,
+		"like",
+		postID,
+		"",
+		fmt.Sprintf("%s liked your post", actorUsername),
+	); err != nil {
+		return fmt.Errorf("create like notification: %w", err)
 	}
 
 	return nil
@@ -235,6 +284,11 @@ func GetPostEngagement(
 				FROM post_favorites
 				WHERE post_id = $1
 			),
+			(
+				SELECT COUNT(*)
+				FROM post_comments
+				WHERE post_id = $1
+			),
 			EXISTS (
 				SELECT 1
 				FROM post_likes
@@ -253,6 +307,7 @@ func GetPostEngagement(
 	).Scan(
 		&engagement.LikesCount,
 		&engagement.FavoritesCount,
+		&engagement.CommentsCount,
 		&engagement.Liked,
 		&engagement.Favorited,
 	)

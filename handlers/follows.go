@@ -41,6 +41,7 @@ func FollowUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Create the follow relationship.
 	if err := auth.FollowUser(
 		r.Context(),
 		followerID,
@@ -64,6 +65,38 @@ func FollowUser(w http.ResponseWriter, r *http.Request) {
 			)
 		}
 
+		return
+	}
+
+	// Find the user who was followed.
+	targetUserID, err := auth.GetUserIDByUsername(
+		r.Context(),
+		username,
+	)
+	if err != nil {
+		http.Error(
+			w,
+			"failed to create follow notification",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	// Create a notification for the followed user.
+	if err := auth.CreateNotification(
+		r.Context(),
+		targetUserID,
+		followerID,
+		"follow",
+		"",
+		"",
+		"started following you",
+	); err != nil {
+		http.Error(
+			w,
+			"failed to create follow notification",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -266,6 +299,7 @@ func Following(w http.ResponseWriter, r *http.Request) {
 
 	_ = json.NewEncoder(w).Encode(users)
 }
+
 func FollowStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

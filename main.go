@@ -176,12 +176,71 @@ func main() {
 		),
 	)
 
+	http.Handle(
+		"/api/me/comments",
+		auth.AuthMiddleware(
+			http.HandlerFunc(handlers.GetUserComments),
+		),
+	)
+
+	// ------------------------------------------------------------
+	// Notification routes
+	// ------------------------------------------------------------
+
+	// GET /api/notifications
+	http.Handle(
+		"/api/notifications",
+		auth.AuthMiddleware(
+			http.HandlerFunc(handlers.GetNotifications),
+		),
+	)
+
+	// Routes under /api/notifications/{...}
+	http.HandleFunc(
+		"/api/notifications/",
+		func(w http.ResponseWriter, r *http.Request) {
+			path := strings.TrimPrefix(
+				r.URL.Path,
+				"/api/notifications/",
+			)
+
+			// GET /api/notifications/unread-count
+			if path == "unread-count" {
+				auth.AuthMiddleware(
+					http.HandlerFunc(handlers.GetUnreadNotificationCount),
+				).ServeHTTP(w, r)
+				return
+			}
+
+			// POST /api/notifications/read-all
+			if path == "read-all" {
+				auth.AuthMiddleware(
+					http.HandlerFunc(handlers.MarkAllNotificationsRead),
+				).ServeHTTP(w, r)
+				return
+			}
+
+			// PATCH /api/notifications/{id}/read
+			if strings.HasSuffix(path, "/read") {
+				auth.AuthMiddleware(
+					http.HandlerFunc(handlers.MarkNotificationRead),
+				).ServeHTTP(w, r)
+				return
+			}
+
+			http.Error(
+				w,
+				"not found",
+				http.StatusNotFound,
+			)
+		},
+	)
+
 	// ------------------------------------------------------------
 	// Post routes
 	// ------------------------------------------------------------
 
 	// POST /api/posts
-	// Create a new post.
 	http.Handle(
 		"/api/posts",
 		auth.AuthMiddleware(
@@ -189,25 +248,45 @@ func main() {
 		),
 	)
 
-	// Routes under /api/posts/{id}
-	//
-	// GET    /api/posts/{id}
-	// DELETE /api/posts/{id}
-	//
-	// POST   /api/posts/{id}/like
-	// DELETE /api/posts/{id}/like
-	//
-	// POST   /api/posts/{id}/favorite
-	// DELETE /api/posts/{id}/favorite
-	//
-	// GET    /api/posts/{id}/engagement
+	// All routes under /api/posts/{...}
 	http.HandleFunc(
 		"/api/posts/",
 		func(w http.ResponseWriter, r *http.Request) {
-			path := strings.TrimPrefix(r.URL.Path, "/api/posts/")
+			path := strings.TrimPrefix(
+				r.URL.Path,
+				"/api/posts/",
+			)
 
-			// Engagement:
+			// ----------------------------------------------------
+			// Comments
+			// POST /api/posts/{id}/comments
+			// GET  /api/posts/{id}/comments
+			// ----------------------------------------------------
+			if strings.HasSuffix(path, "/comments") {
+				switch r.Method {
+				case http.MethodPost:
+					auth.AuthMiddleware(
+						http.HandlerFunc(handlers.CreateComment),
+					).ServeHTTP(w, r)
+
+				case http.MethodGet:
+					handlers.GetPostComments(w, r)
+
+				default:
+					http.Error(
+						w,
+						"method not allowed",
+						http.StatusMethodNotAllowed,
+					)
+				}
+
+				return
+			}
+
+			// ----------------------------------------------------
+			// Engagement
 			// GET /api/posts/{id}/engagement
+			// ----------------------------------------------------
 			if strings.HasSuffix(path, "/engagement") {
 				if r.Method != http.MethodGet {
 					http.Error(
@@ -225,9 +304,11 @@ func main() {
 				return
 			}
 
-			// Likes:
+			// ----------------------------------------------------
+			// Likes
 			// POST   /api/posts/{id}/like
 			// DELETE /api/posts/{id}/like
+			// ----------------------------------------------------
 			if strings.HasSuffix(path, "/like") {
 				switch r.Method {
 				case http.MethodPost:
@@ -251,9 +332,11 @@ func main() {
 				return
 			}
 
-			// Favorites:
+			// ----------------------------------------------------
+			// Favorites
 			// POST   /api/posts/{id}/favorite
 			// DELETE /api/posts/{id}/favorite
+			// ----------------------------------------------------
 			if strings.HasSuffix(path, "/favorite") {
 				switch r.Method {
 				case http.MethodPost:
@@ -277,8 +360,10 @@ func main() {
 				return
 			}
 
-			// Delete post:
+			// ----------------------------------------------------
+			// Delete post
 			// DELETE /api/posts/{id}
+			// ----------------------------------------------------
 			if r.Method == http.MethodDelete {
 				auth.AuthMiddleware(
 					http.HandlerFunc(handlers.DeletePost),
@@ -287,8 +372,10 @@ func main() {
 				return
 			}
 
-			// Get post:
+			// ----------------------------------------------------
+			// Get post
 			// GET /api/posts/{id}
+			// ----------------------------------------------------
 			if r.Method == http.MethodGet {
 				handlers.GetPost(w, r)
 				return
@@ -303,13 +390,28 @@ func main() {
 	)
 
 	// ------------------------------------------------------------
+	// Comment routes outside a post
+	// ------------------------------------------------------------
+
+	// DELETE /api/comments/{id}
+	http.Handle(
+		"/api/comments/",
+		auth.AuthMiddleware(
+			http.HandlerFunc(handlers.DeleteComment),
+		),
+	)
+
+	// ------------------------------------------------------------
 	// User/profile/follow routes
 	// ------------------------------------------------------------
 
 	http.HandleFunc(
 		"/api/users/",
 		func(w http.ResponseWriter, r *http.Request) {
-			path := strings.TrimSuffix(r.URL.Path, "/")
+			path := strings.TrimSuffix(
+				r.URL.Path,
+				"/",
+			)
 
 			// Follow status:
 			// GET /api/users/{username}/follow-status
@@ -335,22 +437,24 @@ func main() {
 			// DELETE /api/users/{username}/follow
 			if strings.HasSuffix(path, "/follow") {
 				auth.AuthMiddleware(
-					http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-						switch r.Method {
-						case http.MethodPost:
-							handlers.FollowUser(w, r)
+					http.HandlerFunc(
+						func(w http.ResponseWriter, r *http.Request) {
+							switch r.Method {
+							case http.MethodPost:
+								handlers.FollowUser(w, r)
 
-						case http.MethodDelete:
-							handlers.UnfollowUser(w, r)
+							case http.MethodDelete:
+								handlers.UnfollowUser(w, r)
 
-						default:
-							http.Error(
-								w,
-								"method not allowed",
-								http.StatusMethodNotAllowed,
-							)
-						}
-					}),
+							default:
+								http.Error(
+									w,
+									"method not allowed",
+									http.StatusMethodNotAllowed,
+								)
+							}
+						},
+					),
 				).ServeHTTP(w, r)
 
 				return
@@ -439,7 +543,9 @@ func main() {
 	// Global request-body limit
 	// ------------------------------------------------------------
 
-	rootHandler := middleware.BodyLimit(http.DefaultServeMux)
+	rootHandler := middleware.BodyLimit(
+		http.DefaultServeMux,
+	)
 
 	server := &http.Server{
 		Addr:              ":8080",
@@ -451,8 +557,12 @@ func main() {
 		MaxHeaderBytes:    32 * 1024,
 	}
 
-	log.Println("OmniVibe backend started on http://localhost:8080")
-	log.Println("PostgreSQL connected successfully")
+	log.Println(
+		"OmniVibe backend started on http://localhost:8080",
+	)
+	log.Println(
+		"PostgreSQL connected successfully",
+	)
 
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal("HTTP server failed:", err)
