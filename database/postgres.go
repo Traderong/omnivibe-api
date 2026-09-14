@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -25,9 +26,13 @@ func Connect() (*pgxpool.Pool, error) {
 	}
 
 	if port := os.Getenv("DB_PORT"); port != "" {
-		config.ConnConfig.Port = 5432
-	}
+		portNumber, err := strconv.ParseUint(port, 10, 16)
+		if err != nil {
+			return nil, err
+		}
 
+		config.ConnConfig.Port = uint16(portNumber)
+	}
 	config.MaxConns = 20
 	config.MinConns = 2
 
