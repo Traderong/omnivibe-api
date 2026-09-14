@@ -7,26 +7,20 @@ import (
 	"github.com/Traderong/omnivibe-api/auth"
 )
 
-func ChangePassword(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPatch {
+func ResetPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	userID, ok := auth.UserIDFromContext(r.Context())
-	if !ok {
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
+	var req auth.ResetPasswordRequest
 
-	var req auth.ChangePasswordRequest
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := DecodeJSON(w, r, &req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if err := auth.ChangeUserPassword(r.Context(), userID, req); err != nil {
+	if err := auth.ResetUserPassword(r.Context(), req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -35,6 +29,6 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"message": "password changed successfully",
+		"message": "password reset successfully",
 	})
 }
