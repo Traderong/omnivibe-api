@@ -175,10 +175,13 @@ func main() {
 			http.HandlerFunc(handlers.ChangePassword),
 		),
 	)
+
 	// ------------------------------------------------------------
 	// Post routes
 	// ------------------------------------------------------------
 
+	// POST /api/posts
+	// Create a new post.
 	http.Handle(
 		"/api/posts",
 		auth.AuthMiddleware(
@@ -186,17 +189,116 @@ func main() {
 		),
 	)
 
+	// Routes under /api/posts/{id}
+	//
+	// GET    /api/posts/{id}
+	// DELETE /api/posts/{id}
+	//
+	// POST   /api/posts/{id}/like
+	// DELETE /api/posts/{id}/like
+	//
+	// POST   /api/posts/{id}/favorite
+	// DELETE /api/posts/{id}/favorite
+	//
+	// GET    /api/posts/{id}/engagement
 	http.HandleFunc(
 		"/api/posts/",
 		func(w http.ResponseWriter, r *http.Request) {
+			path := strings.TrimPrefix(r.URL.Path, "/api/posts/")
+
+			// Engagement:
+			// GET /api/posts/{id}/engagement
+			if strings.HasSuffix(path, "/engagement") {
+				if r.Method != http.MethodGet {
+					http.Error(
+						w,
+						"method not allowed",
+						http.StatusMethodNotAllowed,
+					)
+					return
+				}
+
+				auth.AuthMiddleware(
+					http.HandlerFunc(handlers.PostEngagement),
+				).ServeHTTP(w, r)
+
+				return
+			}
+
+			// Likes:
+			// POST   /api/posts/{id}/like
+			// DELETE /api/posts/{id}/like
+			if strings.HasSuffix(path, "/like") {
+				switch r.Method {
+				case http.MethodPost:
+					auth.AuthMiddleware(
+						http.HandlerFunc(handlers.LikePost),
+					).ServeHTTP(w, r)
+
+				case http.MethodDelete:
+					auth.AuthMiddleware(
+						http.HandlerFunc(handlers.UnlikePost),
+					).ServeHTTP(w, r)
+
+				default:
+					http.Error(
+						w,
+						"method not allowed",
+						http.StatusMethodNotAllowed,
+					)
+				}
+
+				return
+			}
+
+			// Favorites:
+			// POST   /api/posts/{id}/favorite
+			// DELETE /api/posts/{id}/favorite
+			if strings.HasSuffix(path, "/favorite") {
+				switch r.Method {
+				case http.MethodPost:
+					auth.AuthMiddleware(
+						http.HandlerFunc(handlers.FavoritePost),
+					).ServeHTTP(w, r)
+
+				case http.MethodDelete:
+					auth.AuthMiddleware(
+						http.HandlerFunc(handlers.UnfavoritePost),
+					).ServeHTTP(w, r)
+
+				default:
+					http.Error(
+						w,
+						"method not allowed",
+						http.StatusMethodNotAllowed,
+					)
+				}
+
+				return
+			}
+
+			// Delete post:
+			// DELETE /api/posts/{id}
 			if r.Method == http.MethodDelete {
 				auth.AuthMiddleware(
 					http.HandlerFunc(handlers.DeletePost),
 				).ServeHTTP(w, r)
+
 				return
 			}
 
-			handlers.GetPost(w, r)
+			// Get post:
+			// GET /api/posts/{id}
+			if r.Method == http.MethodGet {
+				handlers.GetPost(w, r)
+				return
+			}
+
+			http.Error(
+				w,
+				"method not allowed",
+				http.StatusMethodNotAllowed,
+			)
 		},
 	)
 
@@ -212,9 +314,19 @@ func main() {
 			// Follow status:
 			// GET /api/users/{username}/follow-status
 			if strings.HasSuffix(path, "/follow-status") {
+				if r.Method != http.MethodGet {
+					http.Error(
+						w,
+						"method not allowed",
+						http.StatusMethodNotAllowed,
+					)
+					return
+				}
+
 				auth.AuthMiddleware(
 					http.HandlerFunc(handlers.FollowStatus),
 				).ServeHTTP(w, r)
+
 				return
 			}
 
@@ -240,12 +352,22 @@ func main() {
 						}
 					}),
 				).ServeHTTP(w, r)
+
 				return
 			}
 
 			// Profile statistics:
 			// GET /api/users/{username}/stats
 			if strings.HasSuffix(path, "/stats") {
+				if r.Method != http.MethodGet {
+					http.Error(
+						w,
+						"method not allowed",
+						http.StatusMethodNotAllowed,
+					)
+					return
+				}
+
 				handlers.FollowStats(w, r)
 				return
 			}
@@ -253,6 +375,15 @@ func main() {
 			// Followers:
 			// GET /api/users/{username}/followers
 			if strings.HasSuffix(path, "/followers") {
+				if r.Method != http.MethodGet {
+					http.Error(
+						w,
+						"method not allowed",
+						http.StatusMethodNotAllowed,
+					)
+					return
+				}
+
 				handlers.Followers(w, r)
 				return
 			}
@@ -260,18 +391,50 @@ func main() {
 			// Following:
 			// GET /api/users/{username}/following
 			if strings.HasSuffix(path, "/following") {
+				if r.Method != http.MethodGet {
+					http.Error(
+						w,
+						"method not allowed",
+						http.StatusMethodNotAllowed,
+					)
+					return
+				}
+
 				handlers.Following(w, r)
 				return
 			}
+
+			// User posts:
+			// GET /api/users/{username}/posts
 			if strings.HasSuffix(path, "/posts") {
+				if r.Method != http.MethodGet {
+					http.Error(
+						w,
+						"method not allowed",
+						http.StatusMethodNotAllowed,
+					)
+					return
+				}
+
 				handlers.GetUserPosts(w, r)
 				return
 			}
+
 			// Public profile:
 			// GET /api/users/{username}
+			if r.Method != http.MethodGet {
+				http.Error(
+					w,
+					"method not allowed",
+					http.StatusMethodNotAllowed,
+				)
+				return
+			}
+
 			handlers.PublicProfile(w, r)
 		},
 	)
+
 	// ------------------------------------------------------------
 	// Global request-body limit
 	// ------------------------------------------------------------
