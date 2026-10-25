@@ -4,23 +4,26 @@ import (
 	"fmt"
 	"net/smtp"
 	"os"
+	"strings"
 )
 
 type Service struct {
-	host     string
-	port     string
-	username string
-	password string
-	from     string
+	host        string
+	port        string
+	username    string
+	password    string
+	from        string
+	brevoAPIKey string
 }
 
 func NewService() *Service {
 	return &Service{
-		host:     os.Getenv("SMTP_HOST"),
-		port:     os.Getenv("SMTP_PORT"),
-		username: os.Getenv("SMTP_USERNAME"),
-		password: os.Getenv("SMTP_PASSWORD"),
-		from:     os.Getenv("SMTP_FROM"),
+		host:        os.Getenv("SMTP_HOST"),
+		port:        os.Getenv("SMTP_PORT"),
+		username:    os.Getenv("SMTP_USERNAME"),
+		password:    os.Getenv("SMTP_PASSWORD"),
+		from:        strings.TrimSpace(os.Getenv("SMTP_FROM")),
+		brevoAPIKey: strings.TrimSpace(os.Getenv("BREVO_API_KEY")),
 	}
 }
 
@@ -29,6 +32,10 @@ func (s *Service) send(
 	subject string,
 	body string,
 ) error {
+	if s.brevoAPIKey != "" {
+		return sendBrevoEmail(to, subject, body, s.from, s.brevoAPIKey)
+	}
+
 	if s.host == "" || s.port == "" || s.username == "" ||
 		s.password == "" || s.from == "" {
 		return fmt.Errorf("SMTP configuration is incomplete")
